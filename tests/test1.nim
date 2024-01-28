@@ -48,6 +48,7 @@ test "check":
               "X-Amz-Expires": expireSec,
             }
 
+  # Using STS? Remember the token:
   if tokenKey != "":
     query["X-Amz-Security-Token"] = newJString(tokenKey)
 
