@@ -47,14 +47,17 @@ const
 
 
 proc makeDateTime*(): string =
-  result = getTime().utc().format(basicISO8601)
+  let now = getTime()
+  result = now.utc.format(basicISO8601)
 
 proc makeDate*(date: string = ""): string =
-  ## produce a date string as required for credentialScope, eg. YYYYMMDD
   if date == "":
-    result = getTime().utc.format(dateISO8601)
+    let now = getTime()
+    result = now.utc.format(dateISO8601)
   else:
     result = date[date.low .. ("YYYYMMDD".len-1)]
+
+
 
 proc encodedQuery(input: openArray[KeyValue]): string =
   ## encoded a series of key/value pairs as a query string
@@ -166,10 +169,19 @@ proc stringToSign*(
   request, credentialScope, date: string,
   digest: SigningAlgo = SHA256
 ): string =
-  $digest & '\n' &
-  date & '\n' &
-  credentialScope & '\n' &
-  sha256(request).toHex()
+  result = newStringOfCap(
+    ($digest).len + 1 +
+    date.len + 1 +
+    credentialScope.len + 1 +
+    64  # SHA256 hex length
+  )
+  result.add $digest
+  result.add '\n'
+  result.add date
+  result.add '\n'
+  result.add credentialScope
+  result.add '\n'
+  result.add sha256(request).toHex()
 
 
 proc calculateSignature*(
@@ -181,13 +193,14 @@ proc calculateSignature*(
   digest: SigningAlgo = SHA256
 ): string =
   ## compute a signature using secret, string-to-sign, and other details
-  case digest
-  of SHA256:
-    let
-      kDate = hmacSha256("AWS4" & secret, date.makeDate())
-      kRegion = hmacSha256(kDate, region)
-      kService = hmacSha256(kRegion, service)
-      kSigning = hmacSha256(kService, "aws4_request")
-    result = hmacSha256(kSigning, tosign).toHex()
-  of UnsignedPayload:
-    discard
+  block:
+    case digest
+    of SHA256:
+      let
+        kDate = hmacSha256("AWS4" & secret, makeDate(date))
+        kRegion = hmacSha256(kDate, region)
+        kService = hmacSha256(kRegion, service)
+        kSigning = hmacSha256(kService, "aws4_request")
+      result = hmacSha256(kSigning, tosign).toHex()
+    of UnsignedPayload:
+      discard
